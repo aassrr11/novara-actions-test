@@ -1,0 +1,73 @@
+name: ANAN P0 surgical patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/anan-p0-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      INDEX_URL: "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/6b56/0705/6320/1137/t/3/assets/anan-p0-index.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=merchant-assets%40shopify-tiers.iam.gserviceaccount.com%2F20261011%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261011T143906Z&X-Goog-Expires=300&X-Goog-SignedHeaders=host&X-Goog-Signature=0436c2ef077f4be6acdc061ceaf5b12dfa59f52e314d6824141c895eec5092655aa14c7aad84fc844802a89a230808ebd6127f248d59368bd041e221295fbfde9526533cfed7ae793615c69e92d56f412a09728a71779644782d84d95325fe4f34de4b594ffec33c4031f05cebd95d5f09e87e2b93e390f8a821287728a5930f291836459c3f0c29efc1bd3b239374f46efb9b73647e1ede23d00ee1354d190e03fefb3bdd706182a54dce34f4f56b8daf17774fb58a553709f4b5ba441da925ef6456a42200a9b3f0f53fbe3d02370c0c77895e5659118db19b86b6e0a3fa7b5bc2ee29d2afc8caa7f774c01fb9f92a35e101841491168a85d4a6008bfcdb55"
+      PRODUCT_URL: "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/f3c4/0705/6320/1137/t/3/assets/anan-p0-product.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=merchant-assets%40shopify-tiers.iam.gserviceaccount.com%2F20261011%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261011T143906Z&X-Goog-Expires=300&X-Goog-SignedHeaders=host&X-Goog-Signature=0ea6ba4d76b1ea8b94b36d3fbc5d03872cfb4fcab3f553b89334de8ab49b1473fa213a0310afb1a92f57196e95bd23e75b4be178aa004dc407b65a1e049247f056f0b5baae777bba2886a14c71c33843cbaf54110103c5cb66a38b1ed090f01f520e917824dff3764b04ee72d062a29de90c93fc6bc3e3413df008857928048a625d6733b4fc06c281ada741e6038988d6cfbe4f307d9ce586da9e07c3ae1e1d011ce3526efc1c5218adf19e8e935aa1cbd1dd3c5b70d9f5c80924b9324953c78578f0f40c3032a85d0db44cdd90d9317dd247c6a647823807209b6dbec6d5e0ebda348869094a82cd14cdf9be92a380c39c3cf0471de8cb841d6fba487e4997"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact Shopify rollback assets
+        run: |
+          mkdir -p out
+          curl -fL "$INDEX_URL" -o /tmp/index.json
+          curl -fL "$PRODUCT_URL" -o /tmp/product.json
+          echo "8b588e2a53f955911d31fba4b05ef8c0  /tmp/index.json" | md5sum -c -
+          echo "fe03b1dec11f844a7842c64ec0ef621b  /tmp/product.json" | md5sum -c -
+      - name: Apply guarded surgical replacements
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib, json, re
+
+          def md5(b): return hashlib.md5(b).hexdigest()
+          def once(text, old, new, label):
+              c = text.count(old)
+              if c != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {c}")
+              return text.replace(old, new, 1)
+          def validate_shopify_json(text):
+              clean = re.sub(r'^\s*/\*.*?\*/\s*', '', text, count=1, flags=re.S)
+              json.loads(clean)
+
+          ib = Path('/tmp/index.json').read_bytes()
+          pb = Path('/tmp/product.json').read_bytes()
+          if md5(ib) != '8b588e2a53f955911d31fba4b05ef8c0': raise SystemExit('INDEX baseline mismatch')
+          if md5(pb) != 'fe03b1dec11f844a7842c64ec0ef621b': raise SystemExit('PRODUCT baseline mismatch')
+
+          it = ib.decode('utf-8')
+          pt = pb.decode('utf-8')
+
+          it = once(it, '"discount_percentage": 20', '"discount_percentage": 15', 'INDEX discount')
+
+          replacements = [
+            ('"heading": "How long does shipping take?"', '"heading": "ما مدة التوصيل؟"', 'shipping heading'),
+            ('<p>Orders are processed within 1–2 business days. Standard shipping typically takes 3–5 business days within the continental US, while international delivery ranges from 7–14 business days depending on destination.</p>', '<p>تظهر طرق التوصيل المتاحة وتكلفتها والتقديرات الزمنية ذات الصلة أثناء مسار الشراء أو في تأكيد الطلب، بحسب الوجهة والخدمة المتاحة.</p>', 'shipping body'),
+            ('"heading": "What is your return policy?"', '"heading": "ما سياسة الاستبدال والاسترجاع؟"', 'return heading'),
+            ('<p>We offer a 30-day satisfaction guarantee. If you are not completely satisfied with your purchase, you can return unopened or gently used items within 30 days of delivery for a full refund or exchange.</p>', '<p>يمكن طلب إرجاع أو استبدال المنتجات المؤهلة خلال 14 يومًا تقويميًا من تاريخ الاستلام، وفق شروط سياسة الاستبدال والاسترجاع المعتمدة.</p>', 'return body'),
+            ('<p>Free standard delivery on orders over $100</p>', '<p>تظهر خيارات التوصيل المتاحة وتكلفتها عند إتمام الطلب، بحسب الوجهة والخدمة المتاحة.</p>', 'free shipping body'),
+          ]
+          for old, new, label in replacements:
+              pt = once(pt, old, new, label)
+
+          validate_shopify_json(it)
+          validate_shopify_json(pt)
+          Path('out/anan-p0-index.json').write_bytes(it.encode('utf-8'))
+          Path('out/anan-p0-product.json').write_bytes(pt.encode('utf-8'))
+          Path('out/checksums.txt').write_text(f"index={md5(it.encode('utf-8'))}\nproduct={md5(pt.encode('utf-8'))}\n", encoding='utf-8')
+      - name: Commit patched outputs
+        run: |
+          git config user.name "ANAN P0 QA Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add out/anan-p0-index.json out/anan-p0-product.json out/checksums.txt
+          git commit -m "Generate ANAN P0 guarded theme patches"
+          git push
