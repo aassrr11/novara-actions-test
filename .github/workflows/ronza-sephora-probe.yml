@@ -14,42 +14,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch Ronza Sephora category from Salla Store API
+      - name: Probe Ronza Sephora category from Salla Store API
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('fs');
-          const storeIds = ['1368715218', '1838709108'];
-          const queries = [
-            sid => `https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=${sid}&per_page=100&lang=ar`,
-            sid => `https://api.salla.dev/store/v1/products?filters%5Bcategory_id%5D=928272781&store_id=${sid}&limit=100&lang=ar`
+          const baseQueries = [
+            'https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&per_page=100&lang=ar',
+            'https://api.salla.dev/store/v1/products?filters%5Bcategory_id%5D=928272781&limit=100&lang=ar'
+          ];
+          const attempts = [];
+          const configs = [
+            { label: 'query-store-1368715218', add: '&store_id=1368715218', headers: {} },
+            { label: 'query-store-1838709108', add: '&store_id=1838709108', headers: {} },
+            { label: 'header-domain', add: '', headers: { 'Store-Identifier': 'ronzaone.com', 'Origin': 'https://ronzaone.com', 'Referer': 'https://ronzaone.com/' } },
+            { label: 'header-1368715218', add: '', headers: { 'Store-Identifier': '1368715218', 'Origin': 'https://ronzaone.com', 'Referer': 'https://ronzaone.com/' } },
+            { label: 'header-1838709108', add: '', headers: { 'Store-Identifier': '1838709108', 'Origin': 'https://ronzaone.com', 'Referer': 'https://ronzaone.com/' } },
+            { label: 'query136-header-domain', add: '&store_id=1368715218', headers: { 'Store-Identifier': 'ronzaone.com', 'Origin': 'https://ronzaone.com', 'Referer': 'https://ronzaone.com/' } }
           ];
 
           (async () => {
-            const attempts = [];
-            for (const sid of storeIds) {
-              for (const makeUrl of queries) {
-                const url = makeUrl(sid);
-                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-                const text = await res.text();
-                let body = null;
-                try { body = JSON.parse(text); } catch {}
-                const count = Array.isArray(body?.data) ? body.data.length : -1;
-                attempts.push({ sid, url, status: res.status, count, preview: text.slice(0, 300) });
-                if (res.ok && Array.isArray(body?.data) && body.data.length > 0) {
-                  fs.writeFileSync('ronza-sephora.json', JSON.stringify(body, null, 2));
-                  fs.writeFileSync('ronza-sephora-attempts.json', JSON.stringify(attempts, null, 2));
-                  console.log(`SUCCESS store_id=${sid} products=${body.data.length}`);
-                  return;
+            let saved = false;
+            for (const q of baseQueries) {
+              for (const cfg of configs) {
+                const url = q + cfg.add;
+                try {
+                  const res = await fetch(url, { headers: { 'Accept': 'application/json', 'Accept-Language': 'ar', ...cfg.headers } });
+                  const text = await res.text();
+                  let body = null;
+                  try { body = JSON.parse(text); } catch {}
+                  const count = Array.isArray(body?.data) ? body.data.length : -1;
+                  attempts.push({ label: cfg.label, url, status: res.status, count, keys: body && typeof body === 'object' ? Object.keys(body) : [], preview: text.slice(0, 1500) });
+                  if (!saved && res.ok && Array.isArray(body?.data) && body.data.length > 0) {
+                    fs.writeFileSync('ronza-sephora.json', JSON.stringify(body, null, 2));
+                    saved = true;
+                    console.log(`SUCCESS ${cfg.label} products=${body.data.length}`);
+                  }
+                } catch (err) {
+                  attempts.push({ label: cfg.label, url, error: String(err) });
                 }
               }
             }
             fs.writeFileSync('ronza-sephora-attempts.json', JSON.stringify(attempts, null, 2));
-            console.error('No successful non-empty response', attempts);
-            process.exit(1);
+            console.log(`Diagnostics complete. saved=${saved} attempts=${attempts.length}`);
           })();
           NODE
       - name: Commit probe output
+        if: always()
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
