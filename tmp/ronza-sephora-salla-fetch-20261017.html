@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>Ronza Sephora temp fetch</title><pre id="out">loading...</pre><script>
+(async()=>{
+  const out=document.getElementById('out');
+  const url='https://api.salla.dev/store/v1/products?source=categories&source_value%5B%5D=928272781&per_page=100&page=1&format=light';
+  try{
+    const r=await fetch(url,{headers:{'store-identifier':'1838709108','accept-language':'ar','currency':'SAR','S-SOURCE':'twilight','X-Requested-With':'XMLHttpRequest'}});
+    const t=await r.text();
+    out.textContent='STATUS='+r.status+'\n'+t;
+  }catch(e){out.textContent='ERROR='+String(e)+'\n'+(e&&e.stack||'');}
+})();
+</script>
