@@ -1,0 +1,37 @@
+name: Ronza Sephora Fetch
+on:
+  push:
+    paths:
+      - '.github/workflows/ronza-sephora-fetch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Salla public catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://api.salla.dev/store/v1/products?source=categories&source_value%5B%5D=928272781&per_page=100&page=1&format=light'
+          curl --fail-with-body --silent --show-error \
+            -H 'store-identifier: 1838709108' \
+            -H 'accept-language: ar' \
+            -H 'currency: SAR' \
+            -H 'S-SOURCE: twilight' \
+            -H 'X-Requested-With: XMLHttpRequest' \
+            "$URL" -o ronza-sephora.json
+          python - <<'PY'
+          import json
+          p='ronza-sephora.json'
+          d=json.load(open(p,encoding='utf-8'))
+          print(json.dumps(d,ensure_ascii=False)[:5000])
+          PY
+      - name: Upload catalog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ronza-sephora-catalog
+          path: ronza-sephora.json
+          if-no-files-found: error
+          retention-days: 1
