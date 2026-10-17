@@ -1,0 +1,60 @@
+name: Ronza Sephora Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ronza-sephora-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Ronza Sephora category from Salla Store API
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const storeIds = ['1368715218', '1838709108'];
+          const queries = [
+            sid => `https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=${sid}&per_page=100&lang=ar`,
+            sid => `https://api.salla.dev/store/v1/products?filters%5Bcategory_id%5D=928272781&store_id=${sid}&limit=100&lang=ar`
+          ];
+
+          (async () => {
+            const attempts = [];
+            for (const sid of storeIds) {
+              for (const makeUrl of queries) {
+                const url = makeUrl(sid);
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const text = await res.text();
+                let body = null;
+                try { body = JSON.parse(text); } catch {}
+                const count = Array.isArray(body?.data) ? body.data.length : -1;
+                attempts.push({ sid, url, status: res.status, count, preview: text.slice(0, 300) });
+                if (res.ok && Array.isArray(body?.data) && body.data.length > 0) {
+                  fs.writeFileSync('ronza-sephora.json', JSON.stringify(body, null, 2));
+                  fs.writeFileSync('ronza-sephora-attempts.json', JSON.stringify(attempts, null, 2));
+                  console.log(`SUCCESS store_id=${sid} products=${body.data.length}`);
+                  return;
+                }
+              }
+            }
+            fs.writeFileSync('ronza-sephora-attempts.json', JSON.stringify(attempts, null, 2));
+            console.error('No successful non-empty response', attempts);
+            process.exit(1);
+          })();
+          NODE
+      - name: Commit probe output
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ronza-sephora.json ronza-sephora-attempts.json 2>/dev/null || true
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: capture Ronza Sephora category data'
+          git push
