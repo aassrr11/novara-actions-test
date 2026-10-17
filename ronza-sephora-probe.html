@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ronza Sephora Probe</title></head><body><pre id="out">LOADING</pre><script>
+(async()=>{
+ const out=document.getElementById('out');
+ const attempts=[];
+ const urls=[
+  'https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=1368715218&per_page=100&lang=ar',
+  'https://api.salla.dev/store/v1/products?filters%5Bcategory_id%5D=928272781&store_id=1368715218&limit=100&lang=ar',
+  'https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=1838709108&per_page=100&lang=ar'
+ ];
+ for(const url of urls){
+  try{
+   const r=await fetch(url,{headers:{Accept:'application/json','Accept-Language':'ar'}});
+   const t=await r.text();
+   attempts.push({url,status:r.status,body:t});
+   try{const j=JSON.parse(t); if(r.ok&&Array.isArray(j.data)&&j.data.length){out.textContent=JSON.stringify({success:true,url,data:j,attempts:attempts.map(x=>({url:x.url,status:x.status,preview:x.body.slice(0,300)}))},null,2); return;}}catch(e){}
+  }catch(e){attempts.push({url,error:String(e)})}
+ }
+ out.textContent=JSON.stringify({success:false,attempts},null,2);
+})();
+</script></body></html>
