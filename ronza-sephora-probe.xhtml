@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ronza Sephora Probe</title></head><body><pre id="out">LOADING</pre><script type="application/javascript"><![CDATA[
+(async()=>{
+ const out=document.getElementById('out');
+ const candidates=[
+  {u:'https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=1368715218&per_page=100&lang=ar'},
+  {u:'https://api.salla.dev/store/v1/products?filters%5Bcategory_id%5D=928272781&store_id=1368715218&limit=100&lang=ar'},
+  {u:'https://api.salla.dev/store/v1/products?source=categories&filterable=1&source_value%5B%5D=928272781&store_id=1838709108&per_page=100&lang=ar'}
+ ];
+ const attempts=[];
+ for(const c of candidates){
+  try{
+   const r=await fetch(c.u,{headers:{Accept:'application/json','Accept-Language':'ar'}});
+   const t=await r.text(); attempts.push({url:c.u,status:r.status,preview:t.slice(0,1000)});
+   try{const j=JSON.parse(t); if(r.ok&&Array.isArray(j.data)&&j.data.length){out.textContent=JSON.stringify({success:true,url:c.u,data:j},null,2); return;}}catch(e){}
+  }catch(e){attempts.push({url:c.u,error:String(e)})}
+ }
+ out.textContent=JSON.stringify({success:false,attempts},null,2);
+})();
+]]></script></body></html>
