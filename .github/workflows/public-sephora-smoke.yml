@@ -1,0 +1,23 @@
+name: Public Sephora browser screenshot smoke
+on:
+  push:
+    branches: [qa-public-sephora-smoke-20261019]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install --no-save playwright@1.56.1
+      - run: node qa/anan-public-sephora.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-sephora-shots
+          path: shots/
+          retention-days: 3
